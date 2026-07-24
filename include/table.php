@@ -14,9 +14,9 @@ $password = getenv('DB_PASSWORD');
 
 $logDir = __DIR__ . '/logs';
 
-if (!is_dir($logDir)) {
-    mkdir($logDir, 0777, true);
-}
+// if (!is_dir($logDir)) {
+//     mkdir($logDir, 0777, true);
+// }
 
 $logFile = $logDir . '/database.log';
 
