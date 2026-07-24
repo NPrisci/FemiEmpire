@@ -1,7 +1,19 @@
 <?php
 
-echo "MYSQLHOST = " . getenv('MYSQLHOST') . "<br>";
-echo "MYSQLPORT = " . getenv('MYSQLPORT') . "<br>";
-echo "MYSQLDATABASE = " . getenv('MYSQLDATABASE') . "<br>";
-echo "MYSQLUSER = " . getenv('MYSQLUSER') . "<br>";
-echo "MYSQLPASSWORD = " . getenv('MYSQLPASSWORD') . "<br>";
+try {
+
+    $pdo = new PDO(
+        "mysql:host=".getenv('MYSQLHOST').
+        ";port=".getenv('MYSQLPORT').
+        ";dbname=".getenv('MYSQLDATABASE'),
+        getenv('MYSQLUSER'),
+        getenv('MYSQLPASSWORD')
+    );
+
+    echo "Connexion MySQL OK";
+
+} catch(Exception $e) {
+
+    echo $e->getMessage();
+
+}
