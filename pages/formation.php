@@ -1,5 +1,5 @@
 <?php
-// formation.php - Page dynamique des formations
+// formation.php - Page dynamique des formations (accessible sans connexion)
 
 require_once __DIR__ . '/../config/database.php';
 
@@ -8,30 +8,29 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Vérifier si l'utilisateur est connecté
-if (empty($_SESSION['user_id'])) {
-    header('Location: ?page=login');
-    exit;
-}
-
-$userId = (int) $_SESSION['user_id'];
+// Récupérer l'ID utilisateur s'il est connecté
+$userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+$isLoggedIn = !empty($_SESSION['user_id']);
 
 try {
     $pdo = getDB();
-
-    // Récupérer les infos de l'utilisateur
-    $stmt = $pdo->prepare('
-        SELECT id, prenom, nom, email, role, created_at
-        FROM utilisateurs
-        WHERE id = ?
-    ');
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch();
-
-    if (!$user) {
-        session_destroy();
-        header('Location: ?page=login');
-        exit;
+    
+    // Récupérer les infos de l'utilisateur s'il est connecté
+    $user = null;
+    if ($isLoggedIn) {
+        $stmt = $pdo->prepare('
+            SELECT id, prenom, nom, email, role, created_at
+            FROM utilisateurs
+            WHERE id = ?
+        ');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+        
+        if (!$user) {
+            session_destroy();
+            $isLoggedIn = false;
+            $userId = null;
+        }
     }
 
     // Récupérer toutes les formations actives
@@ -52,35 +51,35 @@ try {
     $stmt->execute();
     $formations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Récupérer les formations auxquelles l'utilisateur est déjà inscrit
-    $stmt = $pdo->prepare('
-        SELECT formation_id 
-        FROM commandes 
-        WHERE utilisateur_id = ? 
-        AND status IN ("payee", "en_attente")
-    ');
-    $stmt->execute([$userId]);
-    $inscriptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    // Récupérer les formations auxquelles l'utilisateur est déjà inscrit (si connecté)
+    $formationsInscrites = [];
+    if ($isLoggedIn && $userId) {
+        $stmt = $pdo->prepare('
+            SELECT formation_id 
+            FROM commandes 
+            WHERE utilisateur_id = ? 
+            AND status IN ("payee", "en_attente")
+        ');
+        $stmt->execute([$userId]);
+        $inscriptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $formationsInscrites = array_flip($inscriptions);
+    }
 
-    $formationsInscrites = array_flip($inscriptions);
 } catch (PDOException $e) {
     error_log("ERREUR CONNEXION: " . $e->getMessage());
     die('Erreur connexion : ' . $e->getMessage());
 }
 
 // Fonctions utilitaires
-function h(string $v): string
-{
+function h(string $v): string {
     return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 }
 
-function initiales(string $prenom, string $nom): string
-{
+function initiales(string $prenom, string $nom): string {
     return strtoupper(mb_substr($prenom, 0, 1) . mb_substr($nom, 0, 1));
 }
 
-function getCategoryIcon(string $categorie): string
-{
+function getCategoryIcon(string $categorie): string {
     $icons = [
         'onglerie' => '💅',
         'onglerie-speciale' => '🌟',
@@ -94,8 +93,7 @@ function getCategoryIcon(string $categorie): string
     return $icons[strtolower($categorie)] ?? $icons['default'];
 }
 
-function getCategoryColor(string $categorie): string
-{
+function getCategoryColor(string $categorie): string {
     $colors = [
         'onglerie' => '#fde8e5',
         'onglerie-speciale' => '#fce4ec',
@@ -109,8 +107,7 @@ function getCategoryColor(string $categorie): string
     return $colors[strtolower($categorie)] ?? $colors['default'];
 }
 
-function getCategoryBadge(string $categorie): string
-{
+function getCategoryBadge(string $categorie): string {
     $badges = [
         'onglerie' => 'Onglerie',
         'onglerie-speciale' => 'Spéciale',
@@ -124,8 +121,7 @@ function getCategoryBadge(string $categorie): string
     return $badges[strtolower($categorie)] ?? $badges['default'];
 }
 
-function formatPrice(float $price): string
-{
+function formatPrice(float $price): string {
     return number_format($price, 0, ',', ' ') . ' F';
 }
 ?>
@@ -138,8 +134,105 @@ function formatPrice(float $price): string
     <title>FEMI Fairy Finger — Formations</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        /* ===== STYLES ===== */
+        /* ===== RESET BOOTSTRAP CONFLICTS ===== */
+        .navbar {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+            background: rgba(250, 247, 244, 0.92) !important;
+            backdrop-filter: blur(12px) !important;
+            border-bottom: 1px solid var(--border) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 0 48px !important;
+            height: 64px !important;
+            flex-wrap: nowrap !important;
+        }
+
+        .navbar .logo {
+            font-family: 'Cormorant Garamond', serif !important;
+            font-size: 1.4rem !important;
+            font-weight: 600 !important;
+            letter-spacing: .04em !important;
+            color: var(--charcoal) !important;
+            text-decoration: none !important;
+        }
+
+        .navbar .logo span {
+            color: var(--rose) !important;
+            font-style: italic !important;
+            font-weight: 300 !important;
+        }
+
+        .navbar-right {
+            display: flex !important;
+            align-items: center !important;
+            gap: 24px !important;
+            margin: 0 !important;
+        }
+
+        .navbar-link {
+            font-size: .82rem !important;
+            font-weight: 500 !important;
+            color: var(--muted) !important;
+            text-decoration: none !important;
+            letter-spacing: .06em !important;
+            text-transform: uppercase !important;
+            transition: color .2s !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+
+        .navbar-link:hover {
+            color: var(--rose) !important;
+            background: transparent !important;
+        }
+
+        .navbar-link.active {
+            color: var(--rose) !important;
+            font-weight: 600 !important;
+        }
+
+        .btn-connexion {
+            font-size: .82rem !important;
+            font-weight: 500 !important;
+            color: var(--rose) !important;
+            text-decoration: none !important;
+            letter-spacing: .06em !important;
+            text-transform: uppercase !important;
+            transition: color .2s !important;
+            padding: 6px 16px !important;
+            border: 1px solid var(--rose) !important;
+            border-radius: 20px !important;
+            background: transparent !important;
+        }
+
+        .btn-connexion:hover {
+            background: var(--rose) !important;
+            color: white !important;
+        }
+
+        .avatar-sm {
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 50% !important;
+            background: linear-gradient(135deg, var(--rose), var(--gold)) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-family: 'Cormorant Garamond', serif !important;
+            font-size: 1rem !important;
+            color: white !important;
+            font-weight: 600 !important;
+            border: 2px solid var(--border) !important;
+            cursor: pointer !important;
+            flex-shrink: 0 !important;
+        }
+
+        /* ===== STYLES GLOBAUX ===== */
         *,
         *::before,
         *::after {
@@ -167,6 +260,7 @@ function formatPrice(float $price): string
             background: var(--cream);
             color: var(--charcoal);
             min-height: 100vh;
+            padding-top: 0 !important;
         }
 
         /* ===== HERO ===== */
@@ -178,8 +272,7 @@ function formatPrice(float $price): string
             justify-content: center;
             text-align: center;
             color: white;
-            background: url('assets/img/inner/service.jfif') no-repeat center center;
-            background-size: cover;
+            background: linear-gradient(135deg, var(--rose-dark), var(--rose));
             overflow: hidden;
         }
 
@@ -189,7 +282,7 @@ function formatPrice(float $price): string
             left: 0;
             right: 0;
             bottom: 0;
-            background:
+            background: 
                 radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 60%),
                 radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 60%);
             z-index: 1;
@@ -263,12 +356,14 @@ function formatPrice(float $price): string
             text-decoration: none;
             font-weight: 600;
             transition: all .3s;
+            border: none;
         }
 
         .hero-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
             color: var(--rose-dark);
+            text-decoration: none;
         }
 
         /* ===== STRIP ===== */
@@ -499,6 +594,7 @@ function formatPrice(float $price): string
             text-decoration: none;
             transition: all .3s;
             font-size: .95rem;
+            cursor: pointer;
         }
 
         .card-cta:hover {
@@ -506,6 +602,7 @@ function formatPrice(float $price): string
             color: white;
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(201, 135, 122, .35);
+            text-decoration: none;
         }
 
         .card-cta.inscrit {
@@ -517,6 +614,15 @@ function formatPrice(float $price): string
             background: var(--muted);
             transform: none;
             box-shadow: none;
+        }
+
+        .card-cta.btn-connexion-required {
+            background: var(--gold);
+        }
+
+        .card-cta.btn-connexion-required:hover {
+            background: var(--gold);
+            opacity: 0.8;
         }
 
         /* ===== WHY US ===== */
@@ -620,103 +726,6 @@ function formatPrice(float $price): string
             margin-top: 2px;
         }
 
-        /* Responsive */
-        @media (max-width: 992px) {
-            .why-inner {
-                grid-template-columns: 1fr;
-                gap: 32px;
-            }
-
-            .why-stats {
-                order: -1;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 12px;
-            }
-
-            .why-features {
-                grid-template-columns: 1fr 1fr;
-                gap: 12px 20px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .why {
-                padding: 40px 16px;
-            }
-
-            .why-inner {
-                gap: 24px;
-            }
-
-            .why-stats {
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-            }
-
-            .stat-box {
-                padding: 14px 12px;
-                border-radius: 12px;
-            }
-
-            .stat-number {
-                font-size: 1.6rem;
-            }
-
-            .stat-label {
-                font-size: 0.7rem;
-            }
-
-            .why-features {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-
-            .why-feature {
-                gap: 10px;
-            }
-
-            .why-feature-body h4 {
-                font-size: 0.9rem;
-            }
-
-            .why-feature-body p {
-                font-size: 0.78rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .why {
-                padding: 30px 12px;
-            }
-
-            .why-stats {
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-            }
-
-            .stat-box {
-                padding: 12px 8px;
-                border-radius: 10px;
-            }
-
-            .stat-number {
-                font-size: 1.3rem;
-            }
-
-            .stat-label {
-                font-size: 0.65rem;
-            }
-
-            .why-feature {
-                gap: 8px;
-            }
-
-            .why-feature-icon {
-                font-size: 1rem;
-                width: 22px;
-            }
-        }
-
         /* ===== CONTACT ===== */
         .contact {
             text-align: center;
@@ -762,27 +771,73 @@ function formatPrice(float $price): string
             background: rgba(255, 255, 255, 0.25);
             color: white;
             transform: translateY(-2px);
+            text-decoration: none;
+        }
+
+        /* ===== REVEAL ===== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all .6s;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ===== MODAL CONNEXION ===== */
+        .modal-connexion .modal-content {
+            border-radius: 24px !important;
+            border: none !important;
+            overflow: hidden !important;
+        }
+
+        .modal-connexion .modal-header {
+            border-bottom: 2px solid var(--border) !important;
+            padding: 20px 24px !important;
+        }
+
+        .modal-connexion .modal-body {
+            padding: 32px 24px !important;
+        }
+
+        .modal-connexion .btn-inscription-link {
+            color: var(--rose) !important;
+            text-decoration: none !important;
+            font-weight: 600 !important;
+        }
+
+        .modal-connexion .btn-inscription-link:hover {
+            text-decoration: underline !important;
         }
 
         /* ===== RESPONSIVE ===== */
         @media (max-width: 992px) {
             .why-inner {
                 grid-template-columns: 1fr;
-                gap: 40px;
+                gap: 32px;
             }
 
             .why-stats {
                 order: -1;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
             }
 
             .cards-grid {
                 grid-template-columns: 1fr 1fr;
             }
+
+            .why-features {
+                grid-template-columns: 1fr 1fr;
+                gap: 12px 20px;
+            }
         }
 
         @media (max-width: 768px) {
             .navbar {
-                padding: 0 20px;
+                padding: 0 20px !important;
             }
 
             .hero-title {
@@ -797,12 +852,35 @@ function formatPrice(float $price): string
                 grid-template-columns: 1fr 1fr;
             }
 
-            .why-features {
-                grid-template-columns: 1fr;
+            .why {
+                padding: 40px 16px;
+            }
+
+            .why-inner {
+                gap: 24px;
             }
 
             .why-stats {
                 grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .stat-box {
+                padding: 14px 12px;
+                border-radius: 12px;
+            }
+
+            .stat-number {
+                font-size: 1.6rem;
+            }
+
+            .stat-label {
+                font-size: 0.7rem;
+            }
+
+            .why-features {
+                grid-template-columns: 1fr;
+                gap: 12px;
             }
 
             .strip {
@@ -818,6 +896,19 @@ function formatPrice(float $price): string
                 flex-direction: column;
                 align-items: center;
             }
+
+            .navbar-right {
+                gap: 12px !important;
+            }
+
+            .navbar-link {
+                font-size: .7rem !important;
+            }
+
+            .btn-connexion {
+                font-size: .7rem !important;
+                padding: 4px 12px !important;
+            }
         }
 
         @media (max-width: 480px) {
@@ -826,7 +917,8 @@ function formatPrice(float $price): string
             }
 
             .why-stats {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
             }
 
             .pricing {
@@ -836,12 +928,65 @@ function formatPrice(float $price): string
             .card-body {
                 padding: 20px 16px;
             }
-        }
 
+            .stat-box {
+                padding: 12px 8px;
+                border-radius: 10px;
+            }
+
+            .stat-number {
+                font-size: 1.3rem;
+            }
+
+            .stat-label {
+                font-size: 0.65rem;
+            }
+
+            .why-feature-icon {
+                font-size: 1rem;
+                width: 22px;
+            }
+
+            .navbar {
+                padding: 0 12px !important;
+            }
+
+            .navbar-link {
+                font-size: .6rem !important;
+            }
+
+            .btn-connexion {
+                font-size: .6rem !important;
+                padding: 3px 10px !important;
+            }
+
+            .avatar-sm {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: .8rem !important;
+            }
+        }
     </style>
 </head>
 
 <body>
+
+    <!-- ===== NAVBAR ===== -->
+    <nav class="navbar">
+        <a href="?page=dashboard" class="logo">FEMI <span>Fairy Finger</span></a>
+        <div class="navbar-right">
+            <?php if ($isLoggedIn && $user): ?>
+                <a href="?page=dashboard" class="navbar-link">Dashboard</a>
+                <a href="?page=mesformations" class="navbar-link">Mes formations</a>
+                <a href="?page=certificats" class="navbar-link">Certificats</a>
+                <a href="?page=profile" class="navbar-link">Profil</a>
+                <div class="avatar-sm"><?= h(initiales($user['prenom'], $user['nom'])) ?></div>
+            <?php else: ?>
+                <a href="?page=login" class="btn-connexion">Se connecter</a>
+                <a href="?page=register" class="btn-connexion" style="background: var(--rose); color: white;">S'inscrire</a>
+            <?php endif; ?>
+        </div>
+    </nav>
 
     <!-- ===== HERO ===== -->
     <section class="hero">
@@ -890,7 +1035,7 @@ function formatPrice(float $price): string
             <svg width="16" height="16" fill="white" viewBox="0 0 24 24">
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
             </svg>
-            Houedonou, Abomey-Calavi
+            Djadjo, Abomey-Calavi
         </div>
     </div>
 
@@ -908,14 +1053,14 @@ function formatPrice(float $price): string
                     <p class="text-muted">Aucune formation disponible pour le moment.</p>
                 </div>
             <?php else: ?>
-                <?php foreach ($formations as $index => $f):
-                    $estInscrit = isset($formationsInscrites[$f['id']]);
+                <?php foreach ($formations as $index => $f): 
+                    $estInscrit = $isLoggedIn && isset($formationsInscrites[$f['id']]);
                     $categoryIcon = getCategoryIcon($f['categorie']);
                     $categoryColor = getCategoryColor($f['categorie']);
                     $categoryName = getCategoryBadge($f['categorie']);
                     $badgeClass = '';
                     $badgeText = '';
-
+                    
                     // Déterminer le badge
                     if (strpos(strtolower($f['titre']), 'spécial') !== false) {
                         $badgeClass = 'promo';
@@ -994,12 +1139,17 @@ function formatPrice(float $price): string
                             </div>
                             <?php if ($estInscrit): ?>
                                 <a href="?page=mesformations" class="card-cta inscrit">✅ Déjà inscrit</a>
-                            <?php else: ?>
+                            <?php elseif ($isLoggedIn): ?>
                                 <button type="button" class="card-cta inscription-btn"
-                                    data-formation-id="<?= $f['id'] ?>"
-                                    data-formation-titre="<?= h($f['titre']) ?>"
-                                    data-formation-prix="<?= $f['prix'] ?? 75000 ?>">
+                                        data-formation-id="<?= $f['id'] ?>"
+                                        data-formation-titre="<?= h($f['titre']) ?>"
+                                        data-formation-prix="<?= $f['prix'] ?? 75000 ?>">
                                     S'inscrire maintenant
+                                </button>
+                            <?php else: ?>
+                                <button type="button" class="card-cta card-cta btn-connexion-required"
+                                        onclick="showConnexionModal('<?= h($f['titre']) ?>')">
+                                    🔒 Connectez-vous pour vous inscrire
                                 </button>
                             <?php endif; ?>
                         </div>
@@ -1014,7 +1164,7 @@ function formatPrice(float $price): string
         <div class="why-inner">
             <div class="why-text reveal">
                 <div class="section-label">Pourquoi nous choisir</div>
-                <h2 class="section-title text-black">L'excellence à <em>chaque</em> formation</h2>
+                <h2 class="section-title">L'excellence à <em>chaque</em> formation</h2>
                 <div class="why-features">
                     <div class="why-feature">
                         <div class="why-feature-icon">✦</div>
@@ -1093,6 +1243,40 @@ function formatPrice(float $price): string
         </div>
     </section>
 
+    <!-- ===== MODAL CONNEXION REQUISE ===== -->
+    <div class="modal fade modal-connexion" id="connexionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-lock-fill text-primary me-2"></i>
+                        Connexion requise
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="display-1 mb-3">🔒</div>
+                    <h4 class="fw-bold mb-3">Connectez-vous pour vous inscrire</h4>
+                    <p class="text-muted mb-2">Pour vous inscrire à la formation :</p>
+                    <p class="fw-bold text-primary" id="modalFormationTitreConnexion">-</p>
+                    <p class="text-muted mb-4">Vous devez être connecté à votre compte pour effectuer une inscription.</p>
+                    <div class="d-flex flex-column gap-3">
+                        <a href="?page=login" class="btn btn-primary rounded-pill py-2">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>
+                            Se connecter
+                        </a>
+                        <div>
+                            <span class="text-muted">Pas encore de compte ?</span>
+                            <a href="?page=register" class="btn-inscription-link">
+                                Créer un compte
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== MODAL INSCRIPTION ===== -->
     <div class="modal fade" id="inscriptionModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1144,8 +1328,9 @@ function formatPrice(float $price): string
             </div>
         </div>
     </div>
-    <br> <br> <br> <br>
+
     <!-- ===== SCRIPTS ===== -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -1163,6 +1348,14 @@ function formatPrice(float $price): string
             reveals.forEach(function(el) {
                 observer.observe(el);
             });
+
+            // ===== MODAL CONNEXION =====
+            var connexionModal = new bootstrap.Modal(document.getElementById('connexionModal'));
+
+            window.showConnexionModal = function(formationTitre) {
+                document.getElementById('modalFormationTitreConnexion').textContent = formationTitre;
+                connexionModal.show();
+            };
 
             // ===== INSCRIPTION =====
             var inscriptionModal = new bootstrap.Modal(document.getElementById('inscriptionModal'));
@@ -1216,6 +1409,16 @@ function formatPrice(float $price): string
                     alert('Une erreur technique est survenue. Veuillez réessayer.');
                 }
             });
+
+            // ===== CONSOLE LOG DEBUG =====
+            console.log('=== 🐛 FORMATIONS ===');
+            console.log('👤 Utilisateur connecté:', <?= json_encode($isLoggedIn) ?>);
+            <?php if ($isLoggedIn && $user): ?>
+                console.log('👤 Infos utilisateur:', <?= json_encode($user) ?>);
+            <?php endif; ?>
+            console.log('📚 Formations:', <?= json_encode($formations) ?>);
+            console.log('📊 Inscriptions:', <?= json_encode($formationsInscrites) ?>);
+            console.log('=== FIN DEBUG ===');
         });
     </script>
 
