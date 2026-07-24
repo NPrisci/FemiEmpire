@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: mon-site-php
+    runtime: php
+    plan: free
+    buildCommand: composer install --no-dev
+    startCommand: php -S 0.0.0.0:$PORT
