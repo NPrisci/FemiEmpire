@@ -770,7 +770,6 @@
 </div>
 <!--==================================================-->
 <!-- End Pricing Area -->
--->
 
 
 <!--==================================================-->
@@ -794,10 +793,6 @@
                 </form>
             </div>
         </div>
-        <p class="footer-desc">
-            Salon spécialisé en prothésie ongulaire, maquillage professionnel
-            et formation beauté pour futures expertes.
-        </p>
     </div>
 </div>
 <!--==================================================-->
