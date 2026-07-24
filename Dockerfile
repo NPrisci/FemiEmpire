@@ -1,0 +1,11 @@
+FROM php:8.3-cli
+
+RUN docker-php-ext-install pdo pdo_mysql
+
+WORKDIR /app
+
+COPY . .
+
+RUN php -m | grep pdo_mysql
+
+CMD php -S 0.0.0.0:$PORT -t .
