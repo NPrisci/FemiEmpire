@@ -3,7 +3,13 @@
 nixPkgs = ["php83", "php83Extensions.pdo_mysql", "php83Extensions.mysqli"]
 
 [phases.install]
-cmds = ["echo 'extension=pdo_mysql.so' > php.ini"]
+cmds = [
+    "cp .user.ini /etc/php/8.3/cli/conf.d/99-user.ini",
+    "cp .user.ini /etc/php/8.3/fpm/conf.d/99-user.ini",
+    "php -r \"copy('https://getcomposer.org/installer', 'composer-setup.php');\"",
+    "php composer-setup.php --install-dir=/usr/local/bin --filename=composer",
+    "composer install --no-dev --optimize-autoloader || true"
+]
 
 [start]
-cmd = "php -S 0.0.0.0:$PORT -t public -c php.ini"
+cmd = "php -S 0.0.0.0:$PORT -t public -c .user.ini"
