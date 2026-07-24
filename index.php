@@ -7,6 +7,7 @@ $userName   = $isLoggedIn ? ($_SESSION['user_nom'] ?? 'Utilisateur') : '';
 
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/session.php';
+require_once __DIR__ . '/include/table.php';
 require_once 'data.php';
 
 $pageStartTime = microtime(true);
