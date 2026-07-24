@@ -1,0 +1,9 @@
+# nixpacks.toml
+[phases.setup]
+nixPkgs = ["php83", "php83Extensions.pdo_mysql", "php83Extensions.mysqli"]
+
+[phases.install]
+cmds = ["echo 'extension=pdo_mysql.so' > php.ini"]
+
+[start]
+cmd = "php -S 0.0.0.0:$PORT -t public -c php.ini"
