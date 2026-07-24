@@ -30,12 +30,9 @@ function getDB(): PDO {
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
-            http_response_code(500);
-            die(json_encode([
-                'success' => false,
-                'message' => $e->getMessage()
-            ]));
-        }
+    http_response_code(500);
+    die("Erreur MySQL : " . $e->getMessage());
+   }
     }
 
     return $pdo;
