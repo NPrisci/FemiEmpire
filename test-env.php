@@ -33,7 +33,8 @@ $files_to_check = [
     'database.sql',
     'data.php',
     'Dockerfile',
-    'index.php'
+    'index.php',
+    'php.ini'
 ];
 foreach ($files_to_check as $file) {
     $exists = file_exists($file);
