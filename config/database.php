@@ -4,11 +4,10 @@
 //  Configuration connexion MySQL
 // ================================================
 
-// Utiliser les variables d'environnement Railway
-define('DB_HOST',     getenv('MYSQLHOST') ?: 'localhost');
-define('DB_NAME',     getenv('MYSQLDATABASE') ?: 'femiempire');  
-define('DB_USER',     getenv('MYSQLUSER') ?: 'root');               
-define('DB_PASS',     getenv('MYSQLPASSWORD') ?: '');                   
+define('DB_HOST',     'localhost');
+define('DB_NAME',     'femiempire');  
+define('DB_USER',     'root');               
+define('DB_PASS',     '');                   
 define('DB_CHARSET',  'utf8mb4');
 
 function getDB(): PDO {
@@ -29,3 +28,4 @@ function getDB(): PDO {
     }
     return $pdo;
 }
+
