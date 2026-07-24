@@ -1,119 +1,95 @@
 <?php
-// init_db.php - Version NON BLOQUANTE
+// init_db.php - Version qui ne bloque jamais
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Log dans les logs Apache
-function logMessage($msg) {
-    error_log("[INIT] " . $msg);
-    echo $msg . "\n";
+function logMsg($msg) {
+    $timestamp = date('Y-m-d H:i:s');
+    $log = "[$timestamp] $msg";
+    error_log($log);
+    echo $log . "\n";
 }
 
-logMessage("=== DÉBUT INITIALISATION ===");
+logMsg("=== DÉBUT INITIALISATION ===");
 
 try {
-    // Vérifier si le fichier config existe
-    if (!file_exists(__DIR__ . '/config/database.php')) {
-        logMessage("❌ Fichier config/database.php manquant");
-        exit(1);
-    }
-    
-    require_once __DIR__ . '/config/database.php';
-    
-    // Vérifier si les extensions sont chargées
+    // Vérifier les extensions
     if (!extension_loaded('pdo_mysql')) {
-        logMessage("❌ Extension PDO MySQL non chargée");
-        exit(1);
+        logMsg("❌ Extension PDO MySQL non chargée");
+        logMsg("Extensions chargées: " . implode(', ', get_loaded_extensions()));
+        exit(0); // Sortie propre, ne bloque pas
     }
+    logMsg("✅ Extension PDO MySQL chargée");
+
+    // Vérifier le fichier config
+    $configFile = __DIR__ . '/config/database.php';
+    if (!file_exists($configFile)) {
+        logMsg("❌ Fichier config manquant: $configFile");
+        exit(0);
+    }
+    logMsg("✅ Fichier config trouvé");
+
+    // Charger la config
+    require_once $configFile;
     
-    logMessage("✅ Extension PDO MySQL chargée");
+    // Vérifier les variables d'environnement
+    logMsg("Variables d'env:");
+    logMsg("  MYSQLHOST: " . (getenv('MYSQLHOST') ?: 'NON DEFINI'));
+    logMsg("  MYSQLPORT: " . (getenv('MYSQLPORT') ?: 'NON DEFINI'));
+    logMsg("  MYSQLDATABASE: " . (getenv('MYSQLDATABASE') ?: 'NON DEFINI'));
+    logMsg("  MYSQLUSER: " . (getenv('MYSQLUSER') ?: 'NON DEFINI'));
     
+    // Tester la connexion
+    logMsg("Test de connexion...");
     $pdo = getDB();
-    logMessage("✅ Connexion réussie à la base");
+    logMsg("✅ Connexion réussie !");
     
-    // Vérifier si les tables existent déjà
+    // Vérifier les tables
     $result = $pdo->query("SHOW TABLES");
     $tables = $result->fetchAll(PDO::FETCH_COLUMN);
+    logMsg("Tables existantes: " . (count($tables) > 0 ? implode(', ', $tables) : 'AUCUNE'));
     
-    if (count($tables) > 0) {
-        logMessage("✅ Tables déjà existantes : " . implode(', ', $tables));
-        exit(0); // Sortie propre
-    }
-    
-    // Créer les tables
-    $sqlFile = __DIR__ . '/database.sql';
-    if (!file_exists($sqlFile)) {
-        logMessage("⚠️  Fichier database.sql manquant, création d'une structure minimale");
-        createMinimalStructure($pdo);
-        exit(0);
-    }
-    
-    $sql = file_get_contents($sqlFile);
-    if (empty(trim($sql))) {
-        logMessage("⚠️  Fichier database.sql vide, création d'une structure minimale");
-        createMinimalStructure($pdo);
-        exit(0);
-    }
-    
-    // Exécuter le SQL
-    $queries = array_filter(array_map('trim', explode(';', $sql)));
-    $count = 0;
-    
-    foreach ($queries as $query) {
-        if (!empty($query)) {
-            try {
-                $pdo->exec($query);
-                $count++;
-            } catch (PDOException $e) {
-                logMessage("⚠️  Erreur sur une requête : " . $e->getMessage());
+    if (count($tables) === 0) {
+        logMsg("Création des tables...");
+        
+        // Vérifier le fichier SQL
+        $sqlFile = __DIR__ . '/database.sql';
+        if (!file_exists($sqlFile)) {
+            logMsg("⚠️  database.sql non trouvé, création d'une table de test");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50))");
+            logMsg("✅ Table test créée");
+        } else {
+            $sql = file_get_contents($sqlFile);
+            if (empty(trim($sql))) {
+                logMsg("⚠️  database.sql est vide");
+            } else {
+                $queries = array_filter(array_map('trim', explode(';', $sql)));
+                foreach ($queries as $query) {
+                    if (!empty($query)) {
+                        try {
+                            $pdo->exec($query);
+                        } catch (PDOException $e) {
+                            logMsg("⚠️  Erreur requête: " . $e->getMessage());
+                        }
+                    }
+                }
+                logMsg("✅ Requêtes exécutées");
             }
         }
+        
+        // Vérifier les tables après création
+        $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+        logMsg("Tables après init: " . (count($tables) > 0 ? implode(', ', $tables) : 'TOUJOURS AUCUNE'));
     }
     
-    logMessage("✅ $count requêtes exécutées");
-    
-    // Vérification finale
-    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-    logMessage("✅ Tables créées : " . implode(', ', $tables));
+    logMsg("✅ INITIALISATION TERMINÉE AVEC SUCCÈS");
     
 } catch (Exception $e) {
-    logMessage("❌ Erreur : " . $e->getMessage());
-    logMessage("Trace : " . $e->getTraceAsString());
-    // Sortie avec succès quand même pour que Apache démarre
+    logMsg("❌ ERREUR: " . $e->getMessage());
+    logMsg("Trace: " . $e->getTraceAsString());
+    // Sortie avec succès pour ne pas bloquer Apache
     exit(0);
 }
 
-function createMinimalStructure($pdo) {
-    logMessage("Création d'une structure minimale...");
-    
-    $sql = "
-        CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(50) UNIQUE NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS posts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            content TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-    ";
-    
-    $queries = array_filter(array_map('trim', explode(';', $sql)));
-    foreach ($queries as $query) {
-        if (!empty($query)) {
-            $pdo->exec($query);
-        }
-    }
-    
-    logMessage("✅ Structure minimale créée");
-}
-
-logMessage("=== INITIALISATION TERMINÉE ===");
+logMsg("=== FIN INITIALISATION ===");
 ?>

@@ -12,19 +12,20 @@ RUN echo "display_errors = On" >> /usr/local/etc/php/conf.d/errors.ini && \
 # Copier les fichiers
 COPY . /var/www/html/
 
-# Créer un script d'initialisation NON BLOQUANT
-RUN echo '#!/bin/bash\n\
-echo "=== INITIALISATION DE LA BASE ==="\n\
-php /var/www/html/init_db.php\n\
-echo "=== DÉMARRAGE D APACHE ==="\n\
-apache2-foreground' > /usr/local/bin/docker-entrypoint.sh && \
-    chmod +x /usr/local/bin/docker-entrypoint.sh
+WORKDIR /var/www/html
 
-# Ajouter un timeout pour éviter le blocage
+# Script d'entrypoint unique et correct
 RUN echo '#!/bin/bash\n\
-echo "=== LANCEMENT DU CONTENEUR ==="\n\
-# Lancer l init en arrière-plan si elle prend trop de temps\n\
-timeout 30 php /var/www/html/init_db.php || echo "Init timeout ou déjà fait"\n\
+echo "=== DÉMARRAGE DU CONTENEUR ==="\n\
+echo "PHP Version: $(php -v | head -1)"\n\
+echo "Extensions MySQL:"\n\
+php -m | grep -i mysql || echo "Aucune extension MySQL trouvée"\n\
+echo "=== INITIALISATION DE LA BASE ==="\n\
+if [ -f /var/www/html/init_db.php ]; then\n\
+    php /var/www/html/init_db.php 2>&1\n\
+else\n\
+    echo "⚠️  init_db.php non trouvé"\n\
+fi\n\
 echo "=== DÉMARRAGE APACHE ==="\n\
 apache2-foreground' > /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /usr/local/bin/docker-entrypoint.sh
